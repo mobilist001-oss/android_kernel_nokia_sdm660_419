@@ -25,12 +25,9 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y bc bison build-essential curl flex git libssl-dev libelf-dev lz4 python3 python-is-python3 libncurses-dev xz-utils zlib1g-dev cpio zip
 
-      - name: Download Google AOSP Clang
+      - name: Download Clang Toolchain
         run: |
-          mkdir -p $GITHUB_WORKSPACE/clang
-          curl -sLO https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/main/clang-r487747c.tar.gz
-          tar -C $GITHUB_WORKSPACE/clang -xzf clang-r487747c.tar.gz
-          rm -f clang-r487747c.tar.gz
+          git clone --depth=1 https://github.com/kdrag0n/proton-clang.git $GITHUB_WORKSPACE/clang
 
       - name: Build Kernel (Image.gz-dtb)
         run: |
@@ -38,7 +35,6 @@ jobs:
           export ARCH=arm64
           export SUBARCH=arm64
           export CC=clang
-          export CLANG_TRIPLE=aarch64-linux-gnu-
           export CROSS_COMPILE=aarch64-linux-gnu-
           export CROSS_COMPILE_ARM32=arm-linux-gnueabi-
 
@@ -48,7 +44,6 @@ jobs:
           # Compile
           make -j$(nproc --all) O=out \
             CC=clang \
-            CLANG_TRIPLE=aarch64-linux-gnu- \
             CROSS_COMPILE=aarch64-linux-gnu- \
             CROSS_COMPILE_ARM32=arm-linux-gnueabi-
 
