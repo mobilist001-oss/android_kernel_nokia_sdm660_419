@@ -39,7 +39,6 @@ jobs:
           export CROSS_COMPILE=aarch64-linux-gnu-
           export CROSS_COMPILE_ARM32=arm-linux-gnueabi-
           export KCFLAGS="-Wno-error"
-          export EXTRA_CFLAGS="-Wno-error"
 
           # Avoid warnings treated as errors in techpack audio under modern Clang
           find techpack/audio -type f \( -name "Kbuild" -o -name "Makefile" \) -exec sed -i 's/-Werror//g' {} +
@@ -60,8 +59,7 @@ jobs:
             HOSTCXX="g++ -B/usr/bin/" \
             CROSS_COMPILE=aarch64-linux-gnu- \
             CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
-            KCFLAGS="-Wno-error" \
-            EXTRA_CFLAGS="-Wno-error" 2>&1 | tee build.log
+            KCFLAGS="-Wno-error" 2>&1 | tee build.log
 
       - name: Prepare AnyKernel3 Package
         run: |
@@ -86,6 +84,16 @@ jobs:
 
           # Replace kernel with 4.19 Image.gz-dtb
           cp ../out/arch/arm64/boot/Image.gz-dtb kernel
+
+          # Enable FBCon onscreen console in boot cmdline
+          sed -i 's/^cmdline=.*/& console=tty0/' header
+
+          # Pre-arm ADB authentication & root debugging in recovery ramdisk
+          mkdir -p rd && cd rd
+          cpio -idmv < ../ramdisk.cpio
+          printf "\nro.adb.secure=0\nro.debuggable=1\nro.secure=0\npersist.service.adb.enable=1\npersist.service.debuggable=1\npersist.sys.usb.config=adb\n" >> prop.default
+          find . | cpio -H newc -o > ../ramdisk.cpio
+          cd .. && rm -rf rd
 
           # Repack
           ../AnyKernel3/tools/magiskboot repack ../prebuilts/boot_lin22.2_boots.img ../boot-4.19-PL2-recovery.img
