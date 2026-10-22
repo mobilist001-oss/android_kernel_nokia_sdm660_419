@@ -77,10 +77,14 @@ jobs:
         run: |
           mkdir -p repack
           cd repack
-          chmod +x ../AnyKernel3/tools/magiskboot
+
+          # Obtain native x86_64 magiskboot binary
+          curl -sL https://github.com/topjohnwu/Magisk/releases/download/v28.1/Magisk-v28.1.apk -o magisk.zip
+          unzip -p magisk.zip lib/x86_64/libmagiskboot.so > ./magiskboot
+          chmod +x ./magiskboot
 
           # Unpack stock working Lineage 22.2 boot image
-          ../AnyKernel3/tools/magiskboot unpack ../prebuilts/boot_lin22.2_boots.img
+          ./magiskboot unpack ../prebuilts/boot_lin22.2_boots.img
 
           # Replace kernel with 4.19 Image.gz-dtb
           cp ../out/arch/arm64/boot/Image.gz-dtb kernel
@@ -91,12 +95,17 @@ jobs:
           # Pre-arm ADB authentication & root debugging in recovery ramdisk
           mkdir -p rd && cd rd
           cpio -idmv < ../ramdisk.cpio
+          for p in prop.default default.prop system/etc/prop.default; do
+            if [ -f "$p" ]; then
+              printf "\nro.adb.secure=0\nro.debuggable=1\nro.secure=0\npersist.service.adb.enable=1\npersist.service.debuggable=1\npersist.sys.usb.config=adb\n" >> "$p"
+            fi
+          done
           printf "\nro.adb.secure=0\nro.debuggable=1\nro.secure=0\npersist.service.adb.enable=1\npersist.service.debuggable=1\npersist.sys.usb.config=adb\n" >> prop.default
           find . | cpio -H newc -o > ../ramdisk.cpio
           cd .. && rm -rf rd
 
           # Repack
-          ../AnyKernel3/tools/magiskboot repack ../prebuilts/boot_lin22.2_boots.img ../boot-4.19-PL2-recovery.img
+          ./magiskboot repack ../prebuilts/boot_lin22.2_boots.img ../boot-4.19-PL2-recovery.img
           cd ..
 
       - name: Extract & Display Build Errors
