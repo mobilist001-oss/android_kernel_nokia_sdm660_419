@@ -5,10 +5,6 @@ on:
   push:
     branches:
       - lineage-23.2
-    paths-ignore:
-      - 'prebuilts/boot24.img'
-      - '.github/workflows/repack.yml'
-      - '*.md'
 
 permissions:
   contents: write
@@ -54,7 +50,7 @@ jobs:
             HOSTCXX="g++ -B/usr/bin/" \
             CROSS_COMPILE=aarch64-linux-gnu- \
             CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
-            vendor/sdm660-perf_defconfig vendor/nokia/nokia.config vendor/nokia/PL2.config
+            vendor/sdm660-perf_defconfig vendor/nokia/nokia.config vendor/nokia/B2N.config vendor/nokia/PL2.config
 
           # Compile
           make -j$(nproc --all) O=out \
@@ -70,14 +66,15 @@ jobs:
           git clone --depth=1 https://github.com/osm0sis/AnyKernel3.git AnyKernel3
           sed -i 's/device.name1=.*/device.name1=PL2/g' AnyKernel3/anykernel.sh
           sed -i 's/device.name2=.*/device.name2=PL2_sprout/g' AnyKernel3/anykernel.sh
-          sed -i 's/device.name3=.*/device.name3=Plate2/g' AnyKernel3/anykernel.sh
+          sed -i 's/device.name3=.*/device.name3=B2N/g' AnyKernel3/anykernel.sh
+          sed -i 's/device.name4=.*/device.name4=B2N_sprout/g' AnyKernel3/anykernel.sh
 
           cp out/arch/arm64/boot/Image.gz-dtb AnyKernel3/ || cp out/arch/arm64/boot/Image.gz AnyKernel3/
           cd AnyKernel3
           zip -r9 ../Nokia_PL2_4.19-Kernel.zip * -x .git README.md
           cd ..
 
-      - name: Repack Boot Image (LineageOS 22.2 Recovery + 4.19 Kernel)
+      - name: Repack Boot Image (LineageOS 24.0 Recovery + 4.19 Kernel)
         run: |
           mkdir -p repack
           cd repack
@@ -87,15 +84,15 @@ jobs:
           unzip -p magisk.zip lib/x86_64/libmagiskboot.so > ./magiskboot
           chmod +x ./magiskboot
 
-          # Unpack stock working Lineage 22.2 boot image
-          ./magiskboot unpack -h ../prebuilts/boot_lin22.2_boots.img || ./magiskboot unpack ../prebuilts/boot_lin22.2_boots.img
+          # Unpack Lineage 24.0 boot image
+          ./magiskboot unpack -h ../prebuilts/boot24.img || ./magiskboot unpack ../prebuilts/boot24.img
 
           # Replace kernel with 4.19 Image.gz-dtb
           cp ../out/arch/arm64/boot/Image.gz-dtb kernel
 
-          # Enable FBCon onscreen console in boot cmdline if header exists
+          # Enable FBCon onscreen console & permissive SELinux in boot cmdline if header exists
           if [ -f header ]; then
-            sed -i 's/^cmdline=.*/& console=tty0/' header
+            sed -i 's/^cmdline=.*/& console=tty0 androidboot.selinux=permissive/' header
           fi
 
           # Pre-arm ADB authentication & root debugging in recovery ramdisk
@@ -113,7 +110,7 @@ jobs:
           fi
 
           # Repack
-          ./magiskboot repack ../prebuilts/boot_lin22.2_boots.img ../boot-4.19-PL2-recovery.img
+          ./magiskboot repack ../prebuilts/boot24.img ../boot-4.19-PL2-recovery.img
           if [ ! -f ../boot-4.19-PL2-recovery.img ] && [ -f new-boot.img ]; then
             cp new-boot.img ../boot-4.19-PL2-recovery.img
           fi
@@ -174,12 +171,12 @@ jobs:
           tag_name: PL2-4.19-v${{ github.run_number }}
           name: Nokia 6.1 (PL2) 4.19 Kernel & Recovery Boot Image #${{ github.run_number }}
           body: |
-            ## Nokia 6.1 (PL2) Kernel 4.19 Bringup Build
+            ## Nokia 6.1 (PL2 / B2N ABL) Kernel 4.19 Bringup Build
 
             ### Artifacts included:
-            - **`boot-4.19-PL2-recovery.img`**: Standalone boot image combining LineageOS 22.2 Recovery ramdisk + 4.19.325 CIP-LTS Kernel (`fastboot boot boot-4.19-PL2-recovery.img`).
+            - **`boot-4.19-PL2-recovery.img`**: Standalone boot image combining LineageOS 24.0 Recovery ramdisk + 4.19.325 CIP-LTS Kernel with PL2 and B2N Device Trees.
             - **`Nokia_PL2_4.19-Kernel.zip`**: AnyKernel3 flashable package for Recovery/TWRP.
-            - **`Image.gz-dtb`**: Raw kernel binary with appended device tree blob.
+            - **`Image.gz-dtb`**: Raw kernel binary with appended PL2 and B2N device tree blobs.
 
             **Commit**: `${{ github.sha }}`
           files: |
