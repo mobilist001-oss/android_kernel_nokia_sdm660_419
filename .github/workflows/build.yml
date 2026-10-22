@@ -84,28 +84,35 @@ jobs:
           chmod +x ./magiskboot
 
           # Unpack stock working Lineage 22.2 boot image
-          ./magiskboot unpack ../prebuilts/boot_lin22.2_boots.img
+          ./magiskboot unpack -h ../prebuilts/boot_lin22.2_boots.img || ./magiskboot unpack ../prebuilts/boot_lin22.2_boots.img
 
           # Replace kernel with 4.19 Image.gz-dtb
           cp ../out/arch/arm64/boot/Image.gz-dtb kernel
 
-          # Enable FBCon onscreen console in boot cmdline
-          sed -i 's/^cmdline=.*/& console=tty0/' header
+          # Enable FBCon onscreen console in boot cmdline if header exists
+          if [ -f header ]; then
+            sed -i 's/^cmdline=.*/& console=tty0/' header
+          fi
 
           # Pre-arm ADB authentication & root debugging in recovery ramdisk
-          mkdir -p rd && cd rd
-          cpio -idmv < ../ramdisk.cpio
-          for p in prop.default default.prop system/etc/prop.default; do
-            if [ -f "$p" ]; then
-              printf "\nro.adb.secure=0\nro.debuggable=1\nro.secure=0\npersist.service.adb.enable=1\npersist.service.debuggable=1\npersist.sys.usb.config=adb\n" >> "$p"
-            fi
-          done
-          printf "\nro.adb.secure=0\nro.debuggable=1\nro.secure=0\npersist.service.adb.enable=1\npersist.service.debuggable=1\npersist.sys.usb.config=adb\n" >> prop.default
-          find . | cpio -H newc -o > ../ramdisk.cpio
-          cd .. && rm -rf rd
+          if [ -f ramdisk.cpio ]; then
+            mkdir -p rd && cd rd
+            cpio -idmv < ../ramdisk.cpio 2>/dev/null || true
+            for p in prop.default default.prop system/etc/prop.default; do
+              if [ -f "$p" ]; then
+                printf "\nro.adb.secure=0\nro.debuggable=1\nro.secure=0\npersist.service.adb.enable=1\npersist.service.debuggable=1\npersist.sys.usb.config=adb\n" >> "$p"
+              fi
+            done
+            printf "\nro.adb.secure=0\nro.debuggable=1\nro.secure=0\npersist.service.adb.enable=1\npersist.service.debuggable=1\npersist.sys.usb.config=adb\n" >> prop.default
+            find . | cpio -H newc -o > ../ramdisk.cpio 2>/dev/null
+            cd .. && rm -rf rd
+          fi
 
           # Repack
           ./magiskboot repack ../prebuilts/boot_lin22.2_boots.img ../boot-4.19-PL2-recovery.img
+          if [ ! -f ../boot-4.19-PL2-recovery.img ] && [ -f new-boot.img ]; then
+            cp new-boot.img ../boot-4.19-PL2-recovery.img
+          fi
           cd ..
 
       - name: Extract & Display Build Errors
