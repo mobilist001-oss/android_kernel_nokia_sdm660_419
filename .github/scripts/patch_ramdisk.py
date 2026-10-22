@@ -72,7 +72,7 @@ def patch_ramdisk(rd_dir):
             f.write(props_to_add)
         print(f"Created {root_prop}")
 
-    # 3. Patch init.rc to trigger clean USB bringup and persistent flash logging
+    # 3. Patch init.rc to trigger clean USB bringup, neutralize charger, enable console & persistent flash logging
     init_rc_candidates = [
         "init.rc",
         "system/etc/init/hw/init.rc",
@@ -100,11 +100,41 @@ service dump_dmesg /system/bin/sh -c "while true; do dmesg > /tmp/dmesg_419.txt 
                     1
                 )
 
-            # Clean trigger on boot: sets sys.usb.config once after ConfigFS is mounted
+            # Neutralize charger service: remove critical and mark disabled so off-mode charger timeout never reboots device
+            def neutralize_charger(m):
+                block = m.group(0)
+                lines = [l for l in block.splitlines(keepends=True) if l.strip() != "critical"]
+                if not any(l.strip() == "disabled" for l in lines):
+                    lines.insert(1, "    disabled\n")
+                return "".join(lines)
+
+            content = re.sub(
+                r"service charger /system/bin/charger.*?(?=\n\S|\Z)",
+                neutralize_charger,
+                content,
+                flags=re.DOTALL
+            )
+
+            # Enable console service with root permissions
+            def make_console_root(m):
+                block = m.group(0)
+                block = re.sub(r"\buser shell\b", "user root", block)
+                block = re.sub(r"\bgroup shell\b", "group root shell", block)
+                block = re.sub(r"\bseclabel u:r:shell:s0\b", "seclabel u:r:recovery:s0", block)
+                return block
+
+            content = re.sub(
+                r"service console /system/bin/sh.*?(?=\n\S|\Z)",
+                make_console_root,
+                content,
+                flags=re.DOTALL
+            )
+
+            # Clean trigger on boot: sets sys.usb.config once after ConfigFS is mounted and starts failsafe services & console
             if "on boot\n" in content and "setprop sys.usb.config adb" not in content:
                 content = content.replace(
                     "on boot\n",
-                    "on boot\n    setprop sys.usb.config adb\n    start dump_dmesg\n",
+                    "on boot\n    setprop sys.usb.config adb\n    start dump_dmesg\n    start console\n",
                     1
                 )
 
@@ -117,8 +147,40 @@ service dump_dmesg /system/bin/sh -c "while true; do dmesg > /tmp/dmesg_419.txt 
             print(f"Injected clean boot triggers & services into {rc_path}")
             patched_init_count += 1
 
+    # 4. Inject live diagnostic helper scripts
+    diag_fb_sh = """#!/system/bin/sh
+echo "=== Display & FB0 Diagnostics ==="
+ls -l /dev/graphics/
+for prop in virtual_size modes bits_per_pixel; do
+    if [ -f /sys/class/graphics/fb0/$prop ]; then
+        echo -n "$prop: "
+        cat /sys/class/graphics/fb0/$prop
+    fi
+done
+echo "Testing fb0 read (first 1024 bytes)..."
+head -c 1024 /dev/graphics/fb0 | wc -c
+echo "Done fb0 read test."
+"""
+    test_recovery_sh = """#!/system/bin/sh
+echo "=== Launching Recovery in Show Text Mode ==="
+/system/bin/recovery --show_text 2>&1 | tee /tmp/rec.log
+"""
+
+    for sname, scontent in [("diag_fb.sh", diag_fb_sh), ("test_recovery.sh", test_recovery_sh)]:
+        for base in [rd_dir, os.path.join(rd_dir, "system", "bin")]:
+            if os.path.exists(base):
+                spath = os.path.join(base, sname)
+                with open(spath, "w", encoding="utf-8") as sf:
+                    sf.write(scontent)
+                try:
+                    os.chmod(spath, 0o755)
+                except Exception:
+                    pass
+                print(f"Injected helper script: {spath}")
+
     print(f"Patched {patched_init_count} main init.rc files successfully.")
 
 if __name__ == "__main__":
     target = sys.argv[1] if len(sys.argv) > 1 else "."
     patch_ramdisk(target)
+
