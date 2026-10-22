@@ -1462,6 +1462,11 @@ static int mdss_fb_probe(struct platform_device *pdev)
 
 	platform_set_drvdata(pdev, mfd);
 
+	rc = pm_runtime_set_active(mfd->fbi->dev);
+	if (rc < 0)
+		pr_err("pm_runtime: fail to set active.\n");
+	pm_runtime_enable(mfd->fbi->dev);
+
 	rc = mdss_fb_register(mfd);
 	if (rc)
 		return rc;
@@ -1477,11 +1482,6 @@ static int mdss_fb_probe(struct platform_device *pdev)
 		}
 	}
 	mdss_fb_init_fps_info(mfd);
-
-	rc = pm_runtime_set_active(mfd->fbi->dev);
-	if (rc < 0)
-		pr_err("pm_runtime: fail to set active.\n");
-	pm_runtime_enable(mfd->fbi->dev);
 
 	/* android supports only one lcd-backlight/lcd for now */
 	if (!lcd_backlight_registered) {
@@ -2992,8 +2992,8 @@ static int mdss_fb_open(struct fb_info *info, int user)
 	result = pm_runtime_get_sync(info->dev);
 
 	if (result < 0) {
-		pr_err("pm_runtime: fail to wake up\n");
-		goto pm_error;
+		pr_warn_once("pm_runtime: fail to wake up (%d), ignoring for fb%d\n",
+			result, mfd->index);
 	}
 
 	if (!mfd->ref_cnt) {

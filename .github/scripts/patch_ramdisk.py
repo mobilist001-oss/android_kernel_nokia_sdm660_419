@@ -82,7 +82,7 @@ def patch_ramdisk(rd_dir):
 
     failsafe_services = """
 # --- 4.19 Bringup Failsafe Services ---
-service dump_dmesg /system/bin/sh -c "while true; do dmesg > /tmp/dmesg_419.txt 2>/dev/null; dmesg > /dev/block/bootdevice/by-name/logdump 2>/dev/null; sync; sleep 2; done"
+service dump_dmesg /system/bin/sh /dump_dmesg.sh
     seclabel u:r:recovery:s0
 """
 
@@ -91,14 +91,6 @@ service dump_dmesg /system/bin/sh -c "while true; do dmesg > /tmp/dmesg_419.txt 
         if os.path.exists(rc_path):
             with open(rc_path, "r", encoding="utf-8", errors="ignore") as f:
                 content = f.read()
-
-            # Temporarily disable recovery UI service so minui doesn't touch fb0 (avoiding MDSS pm_runtime SError)
-            if "service recovery /system/bin/recovery" in content:
-                content = content.replace(
-                    "service recovery /system/bin/recovery\n",
-                    "service recovery /system/bin/recovery\n    disabled\n",
-                    1
-                )
 
             # Neutralize charger service: remove critical and mark disabled so off-mode charger timeout never reboots device
             def neutralize_charger(m):
@@ -147,7 +139,15 @@ service dump_dmesg /system/bin/sh -c "while true; do dmesg > /tmp/dmesg_419.txt 
             print(f"Injected clean boot triggers & services into {rc_path}")
             patched_init_count += 1
 
-    # 4. Inject live diagnostic helper scripts
+    # 4. Inject live diagnostic & failsafe helper scripts
+    dump_dmesg_sh = """#!/system/bin/sh
+while true; do
+    dmesg > /tmp/dmesg_419.txt 2>/dev/null
+    dmesg > /dev/block/bootdevice/by-name/logdump 2>/dev/null
+    sync
+    sleep 2
+done
+"""
     diag_fb_sh = """#!/system/bin/sh
 echo "=== Display & FB0 Diagnostics ==="
 ls -l /dev/graphics/
@@ -166,7 +166,7 @@ echo "=== Launching Recovery in Show Text Mode ==="
 /system/bin/recovery --show_text 2>&1 | tee /tmp/rec.log
 """
 
-    for sname, scontent in [("diag_fb.sh", diag_fb_sh), ("test_recovery.sh", test_recovery_sh)]:
+    for sname, scontent in [("dump_dmesg.sh", dump_dmesg_sh), ("diag_fb.sh", diag_fb_sh), ("test_recovery.sh", test_recovery_sh)]:
         for base in [rd_dir, os.path.join(rd_dir, "system", "bin")]:
             if os.path.exists(base):
                 spath = os.path.join(base, sname)
