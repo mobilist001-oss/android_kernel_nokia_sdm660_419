@@ -1,0 +1,104 @@
+name: Fast Repack Lineage 24 Recovery (4.19 Kernel)
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - lineage-23.2
+    paths:
+      - 'prebuilts/boot24.img'
+      - '.github/workflows/repack.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  repack:
+    name: Repack Boot Image (Lineage 24 + 4.19 Kernel)
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout Source
+        uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            prebuilts
+            .github
+          sparse-checkout-cone-mode: true
+          fetch-depth: 1
+
+      - name: Download Prebuilt 4.19 Kernel
+        run: |
+          curl -sL https://github.com/mobilist001-oss/android_kernel_nokia_sdm660_419/releases/download/PL2-4.19-v10/Image.gz-dtb -o Image.gz-dtb
+          if [ ! -s Image.gz-dtb ]; then
+            echo "Failed to download Image.gz-dtb" && exit 1
+          fi
+          ls -lh Image.gz-dtb
+
+      - name: Unpack and Repack with Magiskboot
+        run: |
+          # Obtain native x86_64 magiskboot binary
+          curl -sL https://github.com/topjohnwu/Magisk/releases/download/v28.1/Magisk-v28.1.apk -o magisk.zip
+          unzip -p magisk.zip lib/x86_64/libmagiskboot.so > ./magiskboot
+          chmod +x ./magiskboot
+
+          mkdir -p repack
+          cd repack
+
+          # Unpack stock Lineage 24 boot image
+          ../magiskboot unpack -h ../prebuilts/boot24.img || ../magiskboot unpack ../prebuilts/boot24.img
+
+          # Replace kernel with our 4.19 Image.gz-dtb (with FBCon)
+          cp ../Image.gz-dtb kernel
+
+          # Enable FBCon onscreen console & permissive SELinux in cmdline
+          if [ -f header ]; then
+            sed -i 's/^cmdline=.*/& console=tty0 androidboot.selinux=permissive/' header
+            cat header
+          fi
+
+          # Pre-arm ADB authentication & root debugging in recovery ramdisk
+          if [ -f ramdisk.cpio ]; then
+            mkdir -p rd && cd rd
+            cpio -idmv < ../ramdisk.cpio 2>/dev/null || true
+            for p in prop.default default.prop system/etc/prop.default; do
+              if [ -f "$p" ]; then
+                printf "\nro.adb.secure=0\nro.debuggable=1\nro.secure=0\npersist.service.adb.enable=1\npersist.service.debuggable=1\npersist.sys.usb.config=adb\n" >> "$p"
+              fi
+            done
+            printf "\nro.adb.secure=0\nro.debuggable=1\nro.secure=0\npersist.service.adb.enable=1\npersist.service.debuggable=1\npersist.sys.usb.config=adb\n" >> prop.default
+            find . | cpio -H newc -o > ../ramdisk.cpio 2>/dev/null
+            cd .. && rm -rf rd
+          fi
+
+          # Repack
+          ../magiskboot repack ../prebuilts/boot24.img ../boot-4.19-PL2-lin24-recovery.img
+          if [ ! -f ../boot-4.19-PL2-lin24-recovery.img ] && [ -f new-boot.img ]; then
+            cp new-boot.img ../boot-4.19-PL2-lin24-recovery.img
+          fi
+          cd ..
+          ls -lh boot-4.19-PL2-lin24-recovery.img
+
+      - name: Upload Repacked Boot Image Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: boot-4.19-PL2-lin24-recovery
+          path: boot-4.19-PL2-lin24-recovery.img
+
+      - name: Publish to GitHub Releases
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: lin24-repack-v${{ github.run_number }}
+          name: Nokia 6.1 (PL2) 4.19 Kernel + Lineage 24 Recovery #${{ github.run_number }}
+          body: |
+            ## Nokia 6.1 (PL2) 4.19 Kernel + Lineage 24 Recovery Repack
+            
+            ### Changes in this build:
+            - **Base**: LineageOS 24.0 Recovery (`boot24.img` with 4.19-compatible ramdisk)
+            - **Kernel**: CIP-LTS Linux 4.19.325 (`Image.gz-dtb` from PL2-4.19-v10)
+            - **FBCon Onscreen Console**: Enabled (`console=tty0`)
+            - **SELinux**: Permissive (`androidboot.selinux=permissive`)
+            - **ADB**: Root & unauthenticated access pre-armed in ramdisk
+          files: boot-4.19-PL2-lin24-recovery.img
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

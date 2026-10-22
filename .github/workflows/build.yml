@@ -5,6 +5,10 @@ on:
   push:
     branches:
       - lineage-23.2
+    paths-ignore:
+      - 'prebuilts/boot24.img'
+      - '.github/workflows/repack.yml'
+      - '*.md'
 
 permissions:
   contents: write
