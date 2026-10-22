@@ -121,10 +121,7 @@ def patch_ramdisk(rd_dir):
 
     failsafe_services = """
 # --- 4.19 Bringup Failsafe Services ---
-service dump_dmesg /system/bin/sh -c "while true; do dmesg > /tmp/dmesg_419.txt 2>/dev/null; for p in /dev/block/bootdevice/by-name/cache /dev/block/platform/soc/*/by-name/cache /dev/block/by-name/cache; do if [ -b \\$p ]; then mount -t ext4 \\$p /cache 2>/dev/null && dmesg > /cache/dmesg_419.txt 2>/dev/null && sync; fi; done; sleep 3; done"
-    seclabel u:r:recovery:s0
-
-service pet_watchdog /system/bin/sh -c "while true; do echo V > /dev/watchdog 2>/dev/null || true; sleep 5; done"
+service dump_dmesg /system/bin/sh -c "while true; do dmesg > /tmp/dmesg_419.txt 2>/dev/null; for p in /dev/block/bootdevice/by-name/cache /dev/block/platform/soc/*/by-name/cache /dev/block/by-name/cache; do if [ -b $p ]; then mount -t ext4 $p /cache 2>/dev/null && dmesg > /cache/dmesg_419.txt 2>/dev/null && sync; fi; done; sleep 2; done"
     seclabel u:r:recovery:s0
 """
 
@@ -134,19 +131,19 @@ service pet_watchdog /system/bin/sh -c "while true; do echo V > /dev/watchdog 2>
             with open(rc_path, "r", encoding="utf-8", errors="ignore") as f:
                 content = f.read()
 
-            # Inject into 'on init'
-            if "on init\n" in content and "start dump_dmesg" not in content:
+            # Inject watchdogd start into 'on init'
+            if "on init\n" in content and "start watchdogd" not in content:
                 content = content.replace(
                     "on init\n",
-                    "on init\n    setprop sys.usb.config adb\n    start watchdogd\n    start adbd\n    start dump_dmesg\n    start pet_watchdog\n",
+                    "on init\n    start watchdogd\n",
                     1
                 )
 
-            # Inject into 'on boot'
-            if "on boot\n" in content and "start watchdogd" not in content:
+            # Trigger USB config and failsafe in 'on boot' (when ConfigFS & FunctionFS are mounted)
+            if "on boot\n" in content and "start dump_dmesg" not in content:
                 content = content.replace(
                     "on boot\n",
-                    "on boot\n    start watchdogd\n    start adbd\n",
+                    "on boot\n    setprop sys.usb.config none\n    setprop sys.usb.config adb\n    start dump_dmesg\n",
                     1
                 )
 
@@ -156,7 +153,7 @@ service pet_watchdog /system/bin/sh -c "while true; do echo V > /dev/watchdog 2>
 
             with open(rc_path, "w", encoding="utf-8") as f:
                 f.write(content)
-            print(f"Injected failsafe triggers & services into {rc_path}")
+            print(f"Injected clean boot triggers & services into {rc_path}")
             patched_init_count += 1
 
     print(f"Patched {patched_init_count} main init.rc files successfully.")
