@@ -1,4 +1,4 @@
-name: Fast Repack Lineage 24 Recovery (4.19 Kernel)
+name: Fast Repack Lineage 22.2 Recovery (4.19 Kernel)
 
 on:
   workflow_dispatch:
@@ -6,7 +6,7 @@ on:
     branches:
       - lineage-23.2
     paths:
-      - 'prebuilts/boot24.img'
+      - 'prebuilts/boot_lin22.2_boots.img'
       - '.github/workflows/repack.yml'
 
 permissions:
@@ -14,7 +14,7 @@ permissions:
 
 jobs:
   repack:
-    name: Repack Boot Image (Lineage 24 + 4.19 Kernel)
+    name: Repack Boot Image (Lineage 22.2 + 4.19 Kernel)
     runs-on: ubuntu-22.04
 
     steps:
@@ -45,15 +45,15 @@ jobs:
           mkdir -p repack
           cd repack
 
-          # Unpack stock Lineage 24 boot image
-          ../magiskboot unpack -h ../prebuilts/boot24.img || ../magiskboot unpack ../prebuilts/boot24.img
+          # Unpack known-working Lineage 22.2 boot image
+          ../magiskboot unpack -h ../prebuilts/boot_lin22.2_boots.img || ../magiskboot unpack ../prebuilts/boot_lin22.2_boots.img
 
-          # Replace kernel with our 4.19 Image.gz-dtb (with FBCon + dual PL2/B2N DTBs)
+          # Replace kernel with our 4.19 Image.gz-dtb (with dual PL2/B2N DTBs)
           cp ../Image.gz-dtb kernel
 
-          # Enable FBCon onscreen console & permissive SELinux in cmdline
+          # Enable display panel (r69338) & FBCon onscreen console & permissive SELinux in cmdline
           if [ -f header ]; then
-            sed -i 's/^cmdline=.*/& console=tty0 androidboot.selinux=permissive/' header
+            sed -i 's/^cmdline=.*/& mdss_mdp.panel=1:dsi:0:fih,mdss_dsi_r69338_1080p_video:config0:1:none:cfg:single_dsi console=tty0 androidboot.selinux=permissive/' header
             cat header
           fi
 
@@ -72,33 +72,34 @@ jobs:
           fi
 
           # Repack
-          ../magiskboot repack ../prebuilts/boot24.img ../boot-4.19-PL2-lin24-recovery.img
-          if [ ! -f ../boot-4.19-PL2-lin24-recovery.img ] && [ -f new-boot.img ]; then
-            cp new-boot.img ../boot-4.19-PL2-lin24-recovery.img
+          ../magiskboot repack ../prebuilts/boot_lin22.2_boots.img ../boot-4.19-PL2-lin22-recovery.img
+          if [ ! -f ../boot-4.19-PL2-lin22-recovery.img ] && [ -f new-boot.img ]; then
+            cp new-boot.img ../boot-4.19-PL2-lin22-recovery.img
           fi
           cd ..
-          ls -lh boot-4.19-PL2-lin24-recovery.img
+          ls -lh boot-4.19-PL2-lin22-recovery.img
 
       - name: Upload Repacked Boot Image Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: boot-4.19-PL2-lin24-recovery
-          path: boot-4.19-PL2-lin24-recovery.img
+          name: boot-4.19-PL2-lin22-recovery
+          path: boot-4.19-PL2-lin22-recovery.img
 
       - name: Publish to GitHub Releases
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: lin24-repack-v${{ github.run_number }}
-          name: Nokia 6.1 (PL2) 4.19 Kernel + Lineage 24 Recovery #${{ github.run_number }}
+          tag_name: lin22-repack-v${{ github.run_number }}
+          name: Nokia 6.1 (PL2) 4.19 Kernel + Lineage 22.2 Recovery #${{ github.run_number }}
           body: |
-            ## Nokia 6.1 (PL2) 4.19 Kernel + Lineage 24 Recovery Repack
+            ## Nokia 6.1 (PL2) 4.19 Kernel + Lineage 22.2 Recovery Repack
             
             ### Changes in this build:
-            - **Base**: LineageOS 24.0 Recovery (`boot24.img` with 4.19-compatible ramdisk)
+            - **Base**: Proven LineageOS 22.2 Recovery (`boot_lin22.2_boots.img` matching working Slot B)
             - **Kernel**: CIP-LTS Linux 4.19.325 (`Image.gz-dtb` from PL2-4.19-v12 with dual PL2/B2N DTBs)
+            - **Display Panel**: Configured for Renesas R69338 (`mdss_mdp.panel=1:dsi:0:fih,mdss_dsi_r69338_1080p_video:config0:1:none:cfg:single_dsi`)
             - **FBCon Onscreen Console**: Enabled (`console=tty0`)
             - **SELinux**: Permissive (`androidboot.selinux=permissive`)
-            - **ADB**: Root & unauthenticated access pre-armed in ramdisk
-          files: boot-4.19-PL2-lin24-recovery.img
+            - **ADB**: Root & UDC hardware binding pre-armed (`sys.usb.controller=a800000.dwc3`)
+          files: boot-4.19-PL2-lin22-recovery.img
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
