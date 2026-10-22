@@ -93,10 +93,10 @@ jobs:
 
             if [ "$target" = "lin22" ]; then
               BASE_IMG="../prebuilts/boot_lin22.2_boots.img"
-              OUT_IMG="../boot-4.19-PL2-lin22-recovery.img"
+              OUT_IMG_NAME="boot-4.19-PL2-lin22-recovery.img"
             else
               BASE_IMG="../prebuilts/boot24.img"
-              OUT_IMG="../boot-4.19-PL2-lin24-recovery.img"
+              OUT_IMG_NAME="boot-4.19-PL2-lin24-recovery.img"
             fi
 
             WORKDIR="repack_$target"
@@ -131,16 +131,16 @@ jobs:
             fi
 
             # Repack
-            ../magiskboot repack "$BASE_IMG" "$OUT_IMG"
-            if [ ! -f "$OUT_IMG" ] && [ -f new-boot.img ]; then
-              cp new-boot.img "$OUT_IMG"
+            ../magiskboot repack "$BASE_IMG" "../$OUT_IMG_NAME"
+            if [ ! -f "../$OUT_IMG_NAME" ] && [ -f new-boot.img ]; then
+              cp new-boot.img "../$OUT_IMG_NAME"
             fi
 
             cd ..
-            if [ ! -s "$OUT_IMG" ]; then
-              echo "ERROR: Failed to produce $OUT_IMG" && exit 1
+            if [ ! -s "$OUT_IMG_NAME" ]; then
+              echo "ERROR: Failed to produce $OUT_IMG_NAME" && exit 1
             fi
-            ls -lh "$OUT_IMG"
+            ls -lh "$OUT_IMG_NAME"
           done
 
       - name: Extract & Display Build Errors
