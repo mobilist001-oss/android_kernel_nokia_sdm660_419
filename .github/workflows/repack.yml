@@ -29,7 +29,7 @@ jobs:
 
       - name: Download Prebuilt 4.19 Kernel
         run: |
-          curl -sL https://github.com/mobilist001-oss/android_kernel_nokia_sdm660_419/releases/download/PL2-4.19-v10/Image.gz-dtb -o Image.gz-dtb
+          curl -sL https://github.com/mobilist001-oss/android_kernel_nokia_sdm660_419/releases/download/PL2-4.19-v12/Image.gz-dtb -o Image.gz-dtb
           if [ ! -s Image.gz-dtb ]; then
             echo "Failed to download Image.gz-dtb" && exit 1
           fi
@@ -48,7 +48,7 @@ jobs:
           # Unpack stock Lineage 24 boot image
           ../magiskboot unpack -h ../prebuilts/boot24.img || ../magiskboot unpack ../prebuilts/boot24.img
 
-          # Replace kernel with our 4.19 Image.gz-dtb (with FBCon)
+          # Replace kernel with our 4.19 Image.gz-dtb (with FBCon + dual PL2/B2N DTBs)
           cp ../Image.gz-dtb kernel
 
           # Enable FBCon onscreen console & permissive SELinux in cmdline
@@ -57,16 +57,16 @@ jobs:
             cat header
           fi
 
-          # Pre-arm ADB authentication & root debugging in recovery ramdisk
+          # Pre-arm ADB authentication & UDC controller binding in recovery ramdisk
           if [ -f ramdisk.cpio ]; then
             mkdir -p rd && cd rd
             cpio -idmv < ../ramdisk.cpio 2>/dev/null || true
             for p in prop.default default.prop system/etc/prop.default; do
               if [ -f "$p" ]; then
-                printf "\nro.adb.secure=0\nro.debuggable=1\nro.secure=0\npersist.service.adb.enable=1\npersist.service.debuggable=1\npersist.sys.usb.config=adb\n" >> "$p"
+                printf "\nro.adb.secure=0\nro.debuggable=1\nro.secure=0\npersist.service.adb.enable=1\npersist.service.debuggable=1\npersist.sys.usb.config=adb\nsys.usb.config=adb\nsys.usb.configfs=1\nsys.usb.controller=a800000.dwc3\nro.recovery.usb.vid=18D1\nro.recovery.usb.adb.pid=D001\n" >> "$p"
               fi
             done
-            printf "\nro.adb.secure=0\nro.debuggable=1\nro.secure=0\npersist.service.adb.enable=1\npersist.service.debuggable=1\npersist.sys.usb.config=adb\n" >> prop.default
+            printf "\nro.adb.secure=0\nro.debuggable=1\nro.secure=0\npersist.service.adb.enable=1\npersist.service.debuggable=1\npersist.sys.usb.config=adb\nsys.usb.config=adb\nsys.usb.configfs=1\nsys.usb.controller=a800000.dwc3\nro.recovery.usb.vid=18D1\nro.recovery.usb.adb.pid=D001\n" >> prop.default
             find . | cpio -H newc -o > ../ramdisk.cpio 2>/dev/null
             cd .. && rm -rf rd
           fi
@@ -95,7 +95,7 @@ jobs:
             
             ### Changes in this build:
             - **Base**: LineageOS 24.0 Recovery (`boot24.img` with 4.19-compatible ramdisk)
-            - **Kernel**: CIP-LTS Linux 4.19.325 (`Image.gz-dtb` from PL2-4.19-v10)
+            - **Kernel**: CIP-LTS Linux 4.19.325 (`Image.gz-dtb` from PL2-4.19-v12 with dual PL2/B2N DTBs)
             - **FBCon Onscreen Console**: Enabled (`console=tty0`)
             - **SELinux**: Permissive (`androidboot.selinux=permissive`)
             - **ADB**: Root & unauthenticated access pre-armed in ramdisk
