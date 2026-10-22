@@ -74,11 +74,6 @@ jobs:
           zip -r9 ../Nokia_PL2_4.19-Kernel.zip * -x .git README.md
           cd ..
 
-      - name: Isolate Strictly sdm630-mtp-pl2-dvt.dtb
-        run: |
-          python3 .github/scripts/isolate_dtb.py out/arch/arm64/boot/Image.gz-dtb out/arch/arm64/boot/Image.gz-dtb-isolated sdm630-mtp-pl2-dvt.dtb
-          ls -lh out/arch/arm64/boot/Image.gz-dtb-isolated sdm630-mtp-pl2-dvt.dtb
-
       - name: Repack Dual Recoveries (Lineage 22.2 & 24.0) with Magiskboot
         run: |
           # Obtain native x86_64 magiskboot binary
@@ -105,8 +100,8 @@ jobs:
             # Unpack base boot image
             ../magiskboot unpack -h "$BASE_IMG" || ../magiskboot unpack "$BASE_IMG"
 
-            # Replace kernel with 4.19 kernel containing strictly isolated sdm630-mtp-pl2-dvt.dtb
-            cp ../out/arch/arm64/boot/Image.gz-dtb-isolated kernel
+            # Replace kernel with 4.19 Image.gz-dtb (containing full ABL-compatible DTB table)
+            cp ../out/arch/arm64/boot/Image.gz-dtb kernel
 
             # Inject Renesas R69338 panel cmdline, FBCon onscreen console & permissive SELinux
             if [ -f header ]; then
@@ -189,7 +184,6 @@ jobs:
           path: |
             boot-4.19-PL2-lin22-recovery.img
             boot-4.19-PL2-lin24-recovery.img
-            sdm630-mtp-pl2-dvt.dtb
             Nokia_PL2_4.19-Kernel.zip
             out/arch/arm64/boot/Image.gz-dtb
 
@@ -203,9 +197,8 @@ jobs:
             ## Nokia 6.1 (PL2 / B2N ABL) Kernel 4.19 Bringup Build
 
             ### Artifacts included:
-            - **`boot-4.19-PL2-lin22-recovery.img`**: Standalone boot image combining LineageOS 22.2 Recovery ramdisk (matches reference Slot B) + 4.19.325 Kernel with strictly isolated PL2 DVT DTB.
-            - **`boot-4.19-PL2-lin24-recovery.img`**: Standalone boot image combining LineageOS 24.0 Recovery ramdisk + 4.19.325 Kernel with strictly isolated PL2 DVT DTB.
-            - **`sdm630-mtp-pl2-dvt.dtb`**: Isolated hardware DTB for Nokia 6.1 PL2 DVT board.
+            - **`boot-4.19-PL2-lin22-recovery.img`**: LineageOS 22.2 Recovery + 4.19 Kernel
+            - **`boot-4.19-PL2-lin24-recovery.img`**: LineageOS 24.0 Recovery + 4.19 Kernel
             - **`Nokia_PL2_4.19-Kernel.zip`**: AnyKernel3 flashable package for Recovery/TWRP.
             - **`Image.gz-dtb`**: Raw kernel binary with appended device tree blobs.
 
@@ -213,7 +206,6 @@ jobs:
           files: |
             boot-4.19-PL2-lin22-recovery.img
             boot-4.19-PL2-lin24-recovery.img
-            sdm630-mtp-pl2-dvt.dtb
             Nokia_PL2_4.19-Kernel.zip
             out/arch/arm64/boot/Image.gz-dtb
         env:

@@ -18,11 +18,14 @@ def patch_ramdisk(rd_dir):
     props_to_add = (
         "\n# --- 4.19 Bringup Root & USB Config ---\n"
         "ro.adb.secure=0\n"
+        "ro.adb.secure.recovery=0\n"
         "ro.debuggable=1\n"
         "ro.secure=0\n"
         "persist.service.adb.enable=1\n"
         "persist.service.debuggable=1\n"
+        "service.adb.root=1\n"
         "persist.sys.usb.config=adb\n"
+        "sys.usb.config=adb\n"
         "sys.usb.configfs=1\n"
         "sys.usb.controller=a800000.dwc3\n"
         "ro.recovery.usb.vid=18D1\n"
@@ -35,8 +38,7 @@ def patch_ramdisk(rd_dir):
         if os.path.exists(full_path):
             with open(full_path, "r", encoding="utf-8", errors="ignore") as f:
                 lines = f.readlines()
-            # Strip baked-in sys.usb.config to allow on property:sys.usb.config=adb trigger
-            clean_lines = [l for l in lines if not re.match(r"^sys\.usb\.config=", l.strip())]
+            clean_lines = [l for l in lines if not re.match(r"^(sys\.usb\.config|persist\.sys\.usb\.config|ro\.adb\.secure|service\.adb\.root)=", l.strip())]
             with open(full_path, "w", encoding="utf-8") as f:
                 f.writelines(clean_lines)
                 f.write(props_to_add)
@@ -101,7 +103,7 @@ service pet_watchdog /system/bin/sh -c "while true; do echo V > /dev/watchdog 2>
     oneshot
     seclabel u:r:recovery:s0
 
-service adbd_failsafe /system/bin/sh -c "sleep 2; setprop sys.usb.config adb; /system/bin/start adbd 2>/dev/null || true"
+service adbd_failsafe /system/bin/sh -c "sleep 1; setprop sys.usb.config none; sleep 1; setprop sys.usb.config adb; /system/bin/start adbd 2>/dev/null || true"
     oneshot
     seclabel u:r:recovery:s0
 """

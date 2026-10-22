@@ -36,11 +36,6 @@ jobs:
           fi
           ls -lh Image.gz-dtb
 
-      - name: Isolate Strictly sdm630-mtp-pl2-dvt.dtb
-        run: |
-          python3 .github/scripts/isolate_dtb.py Image.gz-dtb Image.gz-dtb-isolated sdm630-mtp-pl2-dvt.dtb
-          ls -lh Image.gz-dtb-isolated sdm630-mtp-pl2-dvt.dtb
-
       - name: Repack Dual Recoveries (Lineage 22.2 & 24.0) with Magiskboot
         run: |
           # Obtain native x86_64 magiskboot binary
@@ -68,8 +63,8 @@ jobs:
             # Unpack base boot image
             ../magiskboot unpack -h "$BASE_IMG" || ../magiskboot unpack "$BASE_IMG"
 
-            # Replace kernel with 4.19 kernel containing strictly isolated sdm630-mtp-pl2-dvt.dtb
-            cp ../Image.gz-dtb-isolated kernel
+            # Replace kernel with full 4.19 Image.gz-dtb (containing full ABL-compatible DTB table)
+            cp ../Image.gz-dtb kernel
 
             # Inject Renesas R69338 panel cmdline, FBCon onscreen console & permissive SELinux
             if [ -f header ]; then
@@ -113,7 +108,6 @@ jobs:
           path: |
             boot-4.19-PL2-lin22-recovery.img
             boot-4.19-PL2-lin24-recovery.img
-            sdm630-mtp-pl2-dvt.dtb
 
       - name: Publish to GitHub Releases
         uses: softprops/action-gh-release@v2
@@ -124,31 +118,18 @@ jobs:
             ## Nokia 6.1 (PL2) 4.19 Kernel Dual Recovery Repack
 
             ### Images Included:
-            1. **`boot-4.19-PL2-lin22-recovery.img`**: LineageOS 22.2 Recovery (matches reference Slot B) + 4.19 Kernel
+            1. **`boot-4.19-PL2-lin22-recovery.img`**: LineageOS 22.2 Recovery + 4.19 Kernel
             2. **`boot-4.19-PL2-lin24-recovery.img`**: LineageOS 24.0 Recovery + 4.19 Kernel
-            3. **`sdm630-mtp-pl2-dvt.dtb`**: Isolated hardware DTB for Nokia 6.1 PL2 DVT board
 
-            ### Flashing Instructions (Flash to Slot A only, keeps Slot B untouched):
-            **Option 1: Test Lineage 22.2 Recovery First:**
+            ### Flashing Instructions:
+            Flash to `boot_a` (keeps Slot B intact as reference):
             ```bash
             fastboot flash boot_a boot-4.19-PL2-lin22-recovery.img
-            fastboot reboot
             ```
-
-            **Option 2: Test Lineage 24.0 Recovery:**
-            ```bash
-            fastboot flash boot_a boot-4.19-PL2-lin24-recovery.img
-            fastboot reboot
-            ```
-
-            ### Key Bringup Improvements in this Build:
-            - **Strict DTB Isolation**: Isolates strictly `sdm630-mtp-pl2-dvt.dtb` (`fih,hw-id = <3 2 0>`) matching the physical Renesas R69338 display panel and NT50356 boost converter.
-            - **ADB Auto-Start**: Removed `disabled` from `service adbd` and injected `start adbd` into `on init`, `on boot`, and `on post-fs`.
-            - **Property Trigger Fix**: Removed baked-in `sys.usb.config=adb` from `prop.default` so that `on property:sys.usb.config=adb` triggers properly.
-            - **Hardware Watchdog Failsafe & Log Dump**: Runs `dump_dmesg` writing kernel logs every 5s to `/cache/dmesg_419.txt` so logs survive watchdog resets. Added `pet_watchdog` service to tame the 50s reset.
+            **IMPORTANT (Booting Recovery on PL2)**:
+            Do NOT boot via plain `fastboot reboot`. Disconnect cable or power off, then hold **Volume Up + Power** connected to USB until the phone vibrates into Recovery mode.
           files: |
             boot-4.19-PL2-lin22-recovery.img
             boot-4.19-PL2-lin24-recovery.img
-            sdm630-mtp-pl2-dvt.dtb
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
