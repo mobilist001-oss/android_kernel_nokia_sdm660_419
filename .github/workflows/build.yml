@@ -23,7 +23,7 @@ jobs:
       - name: Install Build Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y bc bison build-essential curl flex git libssl-dev libelf-dev lz4 python2 python3 libncurses5-dev libncursesw5-dev xz-utils zlib1g-dev cpio zip
+          sudo apt-get install -y bc bison build-essential curl flex git libssl-dev libelf-dev lz4 python3 python-is-python3 libncurses-dev xz-utils zlib1g-dev cpio zip
 
       - name: Download Google AOSP Clang
         run: |
