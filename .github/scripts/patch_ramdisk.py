@@ -21,10 +21,15 @@ def patch_ramdisk(rd_dir):
         os.path.join(rd_dir, "data", "misc", "adb", "adb_keys")
     ]
     for kt in key_targets:
-        os.makedirs(os.path.dirname(kt), exist_ok=True)
-        with open(kt, "w", encoding="utf-8") as f:
-            f.write(USER_ADB_KEY)
-        print(f"Injected host ADB public key to {kt}")
+        try:
+            if os.path.islink(kt) or os.path.lexists(kt):
+                os.remove(kt)
+            os.makedirs(os.path.dirname(os.path.abspath(kt)), exist_ok=True)
+            with open(kt, "w", encoding="utf-8") as f:
+                f.write(USER_ADB_KEY)
+            print(f"Injected host ADB public key to {kt}")
+        except Exception as e:
+            print(f"Warning: could not write {kt}: {e}")
 
     # 2. Properties: Strip any conflicting ro.secure / ro.adb.secure / sys.usb props
     prop_candidates = [
