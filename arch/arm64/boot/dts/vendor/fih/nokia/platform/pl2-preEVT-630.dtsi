@@ -47,6 +47,7 @@
 #include "../touch/goodix-gt1x-pl2.dtsi"
 
 /* LCM */
+#include "../display/boost_converter_nt50356_i2c_0x11.dtsi"
 #include "../display/dsi-panel-fih-ft8716-1080p-video-pl2.dtsi"
 #include "../display/dsi-panel-r69338-1080p-video.dtsi"  //ZZDC sunqiupeng add for bringup PL2 2nd panel@20171226
 

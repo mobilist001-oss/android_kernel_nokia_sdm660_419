@@ -74,47 +74,74 @@ jobs:
           zip -r9 ../Nokia_PL2_4.19-Kernel.zip * -x .git README.md
           cd ..
 
-      - name: Repack Boot Image (LineageOS 24.0 Recovery + 4.19 Kernel)
+      - name: Isolate Strictly sdm630-mtp-pl2-dvt.dtb
         run: |
-          mkdir -p repack
-          cd repack
+          python3 .github/scripts/isolate_dtb.py out/arch/arm64/boot/Image.gz-dtb out/arch/arm64/boot/Image.gz-dtb-isolated sdm630-mtp-pl2-dvt.dtb
+          ls -lh out/arch/arm64/boot/Image.gz-dtb-isolated sdm630-mtp-pl2-dvt.dtb
 
+      - name: Repack Dual Recoveries (Lineage 22.2 & 24.0) with Magiskboot
+        run: |
           # Obtain native x86_64 magiskboot binary
           curl -sL https://github.com/topjohnwu/Magisk/releases/download/v28.1/Magisk-v28.1.apk -o magisk.zip
           unzip -p magisk.zip lib/x86_64/libmagiskboot.so > ./magiskboot
           chmod +x ./magiskboot
 
-          # Unpack Lineage 24.0 boot image
-          ./magiskboot unpack -h ../prebuilts/boot24.img || ./magiskboot unpack ../prebuilts/boot24.img
+          for target in lin22 lin24; do
+            echo "=========================================="
+            echo "Repacking $target Recovery Image"
+            echo "=========================================="
 
-          # Replace kernel with 4.19 Image.gz-dtb
-          cp ../out/arch/arm64/boot/Image.gz-dtb kernel
+            if [ "$target" = "lin22" ]; then
+              BASE_IMG="../prebuilts/boot_lin22.2_boots.img"
+              OUT_IMG="../boot-4.19-PL2-lin22-recovery.img"
+            else
+              BASE_IMG="../prebuilts/boot24.img"
+              OUT_IMG="../boot-4.19-PL2-lin24-recovery.img"
+            fi
 
-          # Enable FBCon onscreen console & permissive SELinux in boot cmdline if header exists
-          if [ -f header ]; then
-            sed -i 's/^cmdline=.*/& console=tty0 androidboot.selinux=permissive/' header
-          fi
+            WORKDIR="repack_$target"
+            mkdir -p "$WORKDIR" && cd "$WORKDIR"
 
-          # Pre-arm ADB authentication & root debugging in recovery ramdisk
-          if [ -f ramdisk.cpio ]; then
-            mkdir -p rd && cd rd
-            cpio -idmv < ../ramdisk.cpio 2>/dev/null || true
-            for p in prop.default default.prop system/etc/prop.default; do
-              if [ -f "$p" ]; then
-                printf "\nro.adb.secure=0\nro.debuggable=1\nro.secure=0\npersist.service.adb.enable=1\npersist.service.debuggable=1\npersist.sys.usb.config=adb\n" >> "$p"
-              fi
-            done
-            printf "\nro.adb.secure=0\nro.debuggable=1\nro.secure=0\npersist.service.adb.enable=1\npersist.service.debuggable=1\npersist.sys.usb.config=adb\n" >> prop.default
-            find . | cpio -H newc -o > ../ramdisk.cpio 2>/dev/null
-            cd .. && rm -rf rd
-          fi
+            # Unpack base boot image
+            ../magiskboot unpack -h "$BASE_IMG" || ../magiskboot unpack "$BASE_IMG"
 
-          # Repack
-          ./magiskboot repack ../prebuilts/boot24.img ../boot-4.19-PL2-recovery.img
-          if [ ! -f ../boot-4.19-PL2-recovery.img ] && [ -f new-boot.img ]; then
-            cp new-boot.img ../boot-4.19-PL2-recovery.img
-          fi
-          cd ..
+            # Replace kernel with 4.19 kernel containing strictly isolated sdm630-mtp-pl2-dvt.dtb
+            cp ../out/arch/arm64/boot/Image.gz-dtb-isolated kernel
+
+            # Inject Renesas R69338 panel cmdline, FBCon onscreen console & permissive SELinux
+            if [ -f header ]; then
+              cmdline=$(grep '^cmdline=' header | cut -d= -f2-)
+              for param in "mdss_mdp.panel=1:dsi:0:fih,mdss_dsi_r69338_1080p_video:config0:1:none:cfg:single_dsi" "console=tty0" "androidboot.selinux=permissive"; do
+                if ! echo "$cmdline" | grep -q "$param"; then
+                  cmdline="$cmdline $param"
+                fi
+              done
+              sed -i "s|^cmdline=.*|cmdline=$cmdline|" header
+              echo "Updated cmdline in header:"
+              cat header
+            fi
+
+            # Patch recovery ramdisk: un-disable adbd, set props, add failsafe dmesg dump service
+            if [ -f ramdisk.cpio ]; then
+              mkdir -p rd && cd rd
+              cpio -idmv < ../ramdisk.cpio 2>/dev/null || true
+              python3 ../../.github/scripts/patch_ramdisk.py .
+              find . | cpio -H newc -o > ../ramdisk.cpio 2>/dev/null
+              cd .. && rm -rf rd
+            fi
+
+            # Repack
+            ../magiskboot repack "$BASE_IMG" "$OUT_IMG"
+            if [ ! -f "$OUT_IMG" ] && [ -f new-boot.img ]; then
+              cp new-boot.img "$OUT_IMG"
+            fi
+
+            cd ..
+            if [ ! -s "$OUT_IMG" ]; then
+              echo "ERROR: Failed to produce $OUT_IMG" && exit 1
+            fi
+            ls -lh "$OUT_IMG"
+          done
 
       - name: Extract & Display Build Errors
         if: failure()
@@ -160,7 +187,9 @@ jobs:
         with:
           name: Nokia-PL2-4.19-Build-Artifacts
           path: |
-            boot-4.19-PL2-recovery.img
+            boot-4.19-PL2-lin22-recovery.img
+            boot-4.19-PL2-lin24-recovery.img
+            sdm630-mtp-pl2-dvt.dtb
             Nokia_PL2_4.19-Kernel.zip
             out/arch/arm64/boot/Image.gz-dtb
 
@@ -169,18 +198,22 @@ jobs:
         if: success() && github.ref == 'refs/heads/lineage-23.2'
         with:
           tag_name: PL2-4.19-v${{ github.run_number }}
-          name: Nokia 6.1 (PL2) 4.19 Kernel & Recovery Boot Image #${{ github.run_number }}
+          name: Nokia 6.1 (PL2) 4.19 Kernel & Dual Recovery Images #${{ github.run_number }}
           body: |
             ## Nokia 6.1 (PL2 / B2N ABL) Kernel 4.19 Bringup Build
 
             ### Artifacts included:
-            - **`boot-4.19-PL2-recovery.img`**: Standalone boot image combining LineageOS 24.0 Recovery ramdisk + 4.19.325 CIP-LTS Kernel with PL2 and B2N Device Trees.
+            - **`boot-4.19-PL2-lin22-recovery.img`**: Standalone boot image combining LineageOS 22.2 Recovery ramdisk (matches reference Slot B) + 4.19.325 Kernel with strictly isolated PL2 DVT DTB.
+            - **`boot-4.19-PL2-lin24-recovery.img`**: Standalone boot image combining LineageOS 24.0 Recovery ramdisk + 4.19.325 Kernel with strictly isolated PL2 DVT DTB.
+            - **`sdm630-mtp-pl2-dvt.dtb`**: Isolated hardware DTB for Nokia 6.1 PL2 DVT board.
             - **`Nokia_PL2_4.19-Kernel.zip`**: AnyKernel3 flashable package for Recovery/TWRP.
-            - **`Image.gz-dtb`**: Raw kernel binary with appended PL2 and B2N device tree blobs.
+            - **`Image.gz-dtb`**: Raw kernel binary with appended device tree blobs.
 
             **Commit**: `${{ github.sha }}`
           files: |
-            boot-4.19-PL2-recovery.img
+            boot-4.19-PL2-lin22-recovery.img
+            boot-4.19-PL2-lin24-recovery.img
+            sdm630-mtp-pl2-dvt.dtb
             Nokia_PL2_4.19-Kernel.zip
             out/arch/arm64/boot/Image.gz-dtb
         env:
