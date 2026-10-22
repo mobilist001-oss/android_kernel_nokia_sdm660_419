@@ -69,7 +69,7 @@ jobs:
             # Inject Renesas R69338 panel cmdline, FBCon onscreen console & permissive SELinux
             if [ -f header ]; then
               cmdline=$(grep '^cmdline=' header | cut -d= -f2-)
-              for param in "mdss_mdp.panel=1:dsi:0:fih,mdss_dsi_r69338_1080p_video:config0:1:none:cfg:single_dsi" "console=tty0" "androidboot.selinux=permissive"; do
+              for param in "mdss_mdp.panel=1:dsi:0:fih,mdss_dsi_r69338_1080p_video:config0:1:none:cfg:single_dsi" "console=tty0" "androidboot.selinux=permissive" "selinux=0" "enforcing=0"; do
                 if ! echo "$cmdline" | grep -q "$param"; then
                   cmdline="$cmdline $param"
                 fi
