@@ -31,6 +31,7 @@ jobs:
 
       - name: Build Kernel (Image.gz-dtb)
         run: |
+          set -e -x -o pipefail
           export PATH=/usr/bin:$GITHUB_WORKSPACE/clang/bin:$PATH
           export ARCH=arm64
           export SUBARCH=arm64
@@ -60,7 +61,7 @@ jobs:
             CROSS_COMPILE=aarch64-linux-gnu- \
             CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
             KCFLAGS="-Wno-error" \
-            EXTRA_CFLAGS="-Wno-error"
+            EXTRA_CFLAGS="-Wno-error" 2>&1 | tee build.log
 
       - name: Prepare AnyKernel3 Package
         run: |
@@ -90,7 +91,46 @@ jobs:
           ../AnyKernel3/tools/magiskboot repack ../prebuilts/boot_lin22.2_boots.img ../boot-4.19-PL2-recovery.img
           cd ..
 
+      - name: Extract & Display Build Errors
+        if: failure()
+        run: |
+          mkdir -p build_logs
+          echo "### ❌ Build Failed — Error Summary" >> $GITHUB_STEP_SUMMARY
+          echo '```text' >> $GITHUB_STEP_SUMMARY
+          if [ -f build.log ]; then
+            grep -iE "error:|fatal error:|recipe for target.*failed" build.log | tail -n 50 > build_logs/errors_summary.txt || true
+            cat build_logs/errors_summary.txt >> $GITHUB_STEP_SUMMARY
+            gzip -c build.log > build_logs/build.log.gz
+          else
+            echo "No build.log found" > build_logs/errors_summary.txt
+            cat build_logs/errors_summary.txt >> $GITHUB_STEP_SUMMARY
+          fi
+          echo '```' >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload Build Log Artifacts on Failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-failure-logs
+          path: build_logs/
+
+      - name: Publish Failure Logs to Release
+        if: failure() && github.ref == 'refs/heads/lineage-23.2'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: failure-v${{ github.run_number }}
+          name: ❌ Build Failure Logs #${{ github.run_number }}
+          body: |
+            ## ❌ Kernel Build Failed on Run #${{ github.run_number }}
+            Attached is `errors_summary.txt` and full compressed `build.log.gz`.
+          files: |
+            build_logs/errors_summary.txt
+            build_logs/build.log.gz
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Upload Artifacts
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: Nokia-PL2-4.19-Build-Artifacts
@@ -101,7 +141,7 @@ jobs:
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
-        if: github.ref == 'refs/heads/lineage-23.2'
+        if: success() && github.ref == 'refs/heads/lineage-23.2'
         with:
           tag_name: PL2-4.19-v${{ github.run_number }}
           name: Nokia 6.1 (PL2) 4.19 Kernel & Recovery Boot Image #${{ github.run_number }}
