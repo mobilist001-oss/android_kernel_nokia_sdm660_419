@@ -92,6 +92,14 @@ service dump_dmesg /system/bin/sh -c "while true; do dmesg > /tmp/dmesg_419.txt 
             with open(rc_path, "r", encoding="utf-8", errors="ignore") as f:
                 content = f.read()
 
+            # Temporarily disable recovery UI service so minui doesn't touch fb0 (avoiding MDSS pm_runtime SError)
+            if "service recovery /system/bin/recovery" in content:
+                content = content.replace(
+                    "service recovery /system/bin/recovery\n",
+                    "service recovery /system/bin/recovery\n    disabled\n",
+                    1
+                )
+
             # Clean trigger on boot: sets sys.usb.config once after ConfigFS is mounted
             if "on boot\n" in content and "setprop sys.usb.config adb" not in content:
                 content = content.replace(
