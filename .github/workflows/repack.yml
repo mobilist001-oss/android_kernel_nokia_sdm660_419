@@ -30,7 +30,7 @@ jobs:
 
       - name: Download Prebuilt 4.19 Kernel
         run: |
-          curl -sL https://github.com/mobilist001-oss/android_kernel_nokia_sdm660_419/releases/download/PL2-4.19-v12/Image.gz-dtb -o Image.gz-dtb
+          curl -sL https://github.com/mobilist001-oss/android_kernel_nokia_sdm660_419/releases/download/PL2-4.19-v20/Image.gz-dtb -o Image.gz-dtb
           if [ ! -s Image.gz-dtb ]; then
             echo "Failed to download Image.gz-dtb" && exit 1
           fi
@@ -69,7 +69,7 @@ jobs:
             # Inject Renesas R69338 panel cmdline, FBCon onscreen console & permissive SELinux
             if [ -f header ]; then
               cmdline=$(grep '^cmdline=' header | cut -d= -f2-)
-              for param in "mdss_mdp.panel=1:dsi:0:fih,mdss_dsi_r69338_1080p_video:config0:1:none:cfg:single_dsi" "console=tty0" "androidboot.selinux=permissive" "selinux=0" "enforcing=0"; do
+              for param in "mdss_mdp.panel=1:dsi:0:fih,mdss_dsi_r69338_1080p_video:config0:1:none:cfg:single_dsi" "console=tty0" "androidboot.selinux=permissive" "selinux=0" "enforcing=0" "androidboot.usbcontroller=a800000.dwc3"; do
                 if ! echo "$cmdline" | grep -q "$param"; then
                   cmdline="$cmdline $param"
                 fi

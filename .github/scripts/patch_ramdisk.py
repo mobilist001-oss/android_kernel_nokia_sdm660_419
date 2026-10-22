@@ -121,7 +121,7 @@ def patch_ramdisk(rd_dir):
 
     failsafe_services = """
 # --- 4.19 Bringup Failsafe Services ---
-service dump_dmesg /system/bin/sh -c "while true; do dmesg > /tmp/dmesg_419.txt 2>/dev/null; for p in /dev/block/bootdevice/by-name/cache /dev/block/platform/soc/*/by-name/cache /dev/block/by-name/cache; do if [ -b $p ]; then mount -t ext4 $p /cache 2>/dev/null && dmesg > /cache/dmesg_419.txt 2>/dev/null && sync; fi; done; sleep 2; done"
+service dump_dmesg /system/bin/sh -c "while true; do dmesg > /tmp/dmesg_419.txt 2>/dev/null; dmesg > /dev/block/bootdevice/by-name/logdump 2>/dev/null; sync; sleep 2; done"
     seclabel u:r:recovery:s0
 """
 
