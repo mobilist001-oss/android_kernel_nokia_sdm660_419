@@ -23,7 +23,7 @@ jobs:
       - name: Install Build Dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y bc bison build-essential curl flex git libssl-dev libelf-dev lz4 python3 python-is-python3 libncurses-dev xz-utils zlib1g-dev cpio zip
+          sudo apt-get install -y bc bison build-essential curl flex git libssl-dev libelf-dev lz4 python3 python-is-python3 libncurses-dev xz-utils zlib1g-dev cpio zip gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi
 
       - name: Download Clang Toolchain
         run: |
@@ -39,9 +39,13 @@ jobs:
           export CROSS_COMPILE_ARM32=arm-linux-gnueabi-
 
           # Defconfig combination for PL2 (Nokia 6.1)
-          make O=out vendor/sdm660-perf_defconfig vendor/nokia/nokia.config vendor/nokia/PL2.config \
+          make O=out \
+            CC=clang \
             HOSTCC="gcc -B/usr/bin/" \
-            HOSTCXX="g++ -B/usr/bin/"
+            HOSTCXX="g++ -B/usr/bin/" \
+            CROSS_COMPILE=aarch64-linux-gnu- \
+            CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
+            vendor/sdm660-perf_defconfig vendor/nokia/nokia.config vendor/nokia/PL2.config
 
           # Compile
           make -j$(nproc --all) O=out \
